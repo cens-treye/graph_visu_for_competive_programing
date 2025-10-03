@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>競技プログラミング用グラフ視覚化ツール (Cytoscape.js版)</title>
+    <!-- Tailwind CSSの読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Cytoscape.jsライブラリの読み込み -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape-cola/2.6.1/cytoscape-cola.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📐</text></svg>">
+    <style>
+        /* グラフコンテナのスタイル */
+        #cy {
+            width: 100%;
+            height: 100%;
+            display: block;
+            position: relative;
+        }
+
+        .network-container {
+            flex-grow: 1;
+            height: 60vh;
+            /* モバイルでの高さを確保 */
+        }
+
+        @media (min-width: 768px) {
+            .network-container {
+                height: auto;
+                /* デスクトップでは自動高さ */
+            }
+        }
+
+        /* コンテキストメニューのスタイル */
+        .context-menu {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 8px 0;
+            min-width: 180px;
+        }
+
+        .context-menu-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .context-menu-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .context-menu-item.delete {
+            color: #ef4444;
+            /* red-500 */
+        }
+
+        .context-menu-item.delete:hover {
+            background-color: #fee2e2;
+            /* red-100 */
+        }
+    </style>
+</head>
+
+<body class="p-4 md:p-6 bg-gray-50 font-sans">
+
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-800">競技プログラミング用グラフ視覚化ツール</h1>
+        <button id="help-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-colors">
+            使い方
+        </button>
+    </div>
+
+    <!-- コントロールパネル -->
+    <div class="controls bg-white p-4 rounded-xl shadow-md mb-4 flex flex-wrap gap-4 items-center justify-start">
+        <div class="flex items-center gap-2">
+            <button id="import-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-colors">インポート</button>
+            <button id="export-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-colors">エクスポート</button>
+        </div>
+        <div class="flex items-center gap-2">
+            <label for="import-type" class="text-sm font-medium text-gray-700">入力形式:</label>
+            <select id="import-type" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <option value="edge-list">Edge List</option>
+                <option value="adjacency-list">Adjacency List</option>
+                <option value="adjacency-matrix">Adjacency Matrix</option>
+            </select>
+        </div>
+        <div class="flex items-center gap-2">
+            <label for="graph-type" class="text-sm font-medium text-gray-700">グラフ種類:</label>
+            <select id="graph-type" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                <option value="normal">Normal</option>
+                <option value="tree">Tree</option>
+            </select>
+        </div>
+        <div id="root-control" class="flex items-center gap-2 hidden">
+            <label for="root-input" class="text-sm font-medium text-gray-700">Root:</label>
+            <input type="number" id="root-input" value="0" class="w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+            <button id="set-root-btn" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded-lg shadow transition-colors text-sm">適用</button>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="flex items-center">
+                <input id="directed-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                <label for="directed-checkbox" class="ml-2 block text-sm text-gray-900">Directed</label>
+            </div>
+            <div class="flex items-center">
+                <input id="weighted-checkbox" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                <label for="weighted-checkbox" class="ml-2 block text-sm text-gray-900">Weighted</label>
+            </div>
+        </div>
+        <button id="indexing-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-colors">0-indexed</button>
+        <button id="reset-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-colors">リセット</button>
+        <button id="add-node-btn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg shadow transition-colors">頂点追加</button>
+    </div>
+
+    <!-- メインエリア -->
+    <div class="flex flex-col md:flex-row gap-4">
+        <textarea id="io-textarea" class="w-full md:w-1/3 h-64 md:h-auto p-3 border border-gray-300 rounded-lg shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 font-mono" placeholder="ここにグラフ情報を入力・出力..."></textarea>
+        <div class="network-container bg-white border border-gray-200 rounded-xl shadow-md overflow-hidden">
+            <div id="cy"></div>
+        </div>
+    </div>
+
+    <!-- 右クリックメニュー (Node) -->
+    <div id="node-context-menu" class="context-menu">
+        <div class="context-menu-item" id="add-edge-menu-btn">この頂点から辺を追加</div>
+        <div class="context-menu-item delete" id="delete-node-menu-btn">この頂点を削除</div>
+    </div>
+
+    <!-- 右クリックメニュー (Edge) -->
+    <div id="edge-context-menu" class="context-menu">
+        <div class="context-menu-item" id="change-weight-menu-btn">重みを変更</div>
+        <div class="context-menu-item" id="reverse-edge-menu-btn">向きを逆転</div>
+        <div class="context-menu-item delete" id="delete-edge-menu-btn">この辺を削除</div>
+    </div>
+
+    <!-- 使い方モーダル -->
+    <div id="help-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">ツールの使い方</h3>
+                <div class="mt-2 px-7 py-3 text-left text-sm text-gray-600">
+                    <p class="font-bold my-2">基本操作:</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><b>頂点の移動:</b> 頂点をドラッグして移動できます。</li>
+                        <li><b>頂点の追加:</b> 右上の「頂点追加」ボタンで新しい頂点を追加します。</li>
+                        <li><b>右クリック:</b> 頂点や辺を右クリックすると、編集メニューが表示されます。</li>
+                        <li><b>ズーム:</b> マウスホイールで拡大・縮小ができます。</li>
+                    </ul>
+                    <p class="font-bold my-2 mt-4">インポート:</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>テキストエリアにグラフ情報を入力し、「インポート」ボタンを押してください。</li>
+                        <li><b>Edge List:</b> 1行目に `N M` (N:頂点数, M:辺数)。2行目以降に辺 `u v (w)` を入力。</li>
+                        <li><b>Adjacency List:</b> 1行目に `N`。2行目以降、各行に頂点 `i` の隣接頂点をスペース区切りで入力。</li>
+                        <li><b>Adjacency Matrix:</b> 1行目に `N`。2行目以降、N×Nの隣接行列を入力。</li>
+                        <li>各種チェックボックスやボタンで、有向/重み付き/0-or-1-indexedを設定してからインポートしてください。</li>
+                    </ul>
+                    <p class="font-bold my-2 mt-4">エクスポート:</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>現在のグラフ情報がEdge List形式でテキストエリアに出力されます。</li>
+                    </ul>
+                    <p class="font-bold my-2 mt-4">Treeモード:</p>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li>グラフ種類で「Tree」を選択すると有効になります。</li>
+                        <li>Rootの頂点番号を指定して「適用」すると、根付き木として描画されます。</li>
+                        <li>Rootは赤色、その他の頂点はRootからの距離に応じて色が変わります。</li>
+                    </ul>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="close-help-modal" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300">
+                        閉じる
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM要素の取得 ---
+            const container = document.getElementById('cy');
+            const importBtn = document.getElementById('import-btn');
+            const exportBtn = document.getElementById('export-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const addNodeBtn = document.getElementById('add-node-btn');
+            const indexingBtn = document.getElementById('indexing-btn');
+            const setRootBtn = document.getElementById('set-root-btn');
+            const ioTextarea = document.getElementById('io-textarea');
+            const directedCheckbox = document.getElementById('directed-checkbox');
+            const weightedCheckbox = document.getElementById('weighted-checkbox');
+            const importTypeSelect = document.getElementById('import-type');
+            const graphTypeSelect = document.getElementById('graph-type');
+            const rootControl = document.getElementById('root-control');
+            const rootInput = document.getElementById('root-input');
+            const nodeContextMenu = document.getElementById('node-context-menu');
+            const edgeContextMenu = document.getElementById('edge-context-menu');
+            const helpButton = document.getElementById('help-button');
+            const helpModal = document.getElementById('help-modal');
+            const closeHelpModal = document.getElementById('close-help-modal');
+
+            const MAX_NODES = 100; // 最大ノード数
+
+            // --- 状態管理 ---
+            let state = {
+                isZeroIndexed: true,
+                isDirected: false,
+                isWeighted: false,
+                graphMode: 'normal',
+                edgeAddition: { active: false, fromNode: null },
+                contextTarget: { type: null, element: null },
+            };
+
+            // --- Cytoscape.jsの初期化 ---
+            const cy = cytoscape({
+                container: container,
+                wheelSensitivity: 0.2, // ズーム感度を低く設定
+                elements: [],
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': '#9ca3af', // gray-400
+                            'border-color': '#4b5563', // gray-600
+                            'border-width': 2,
+                            'label': 'data(id)',
+                            'color': '#111827', // gray-900
+                            'font-size': '14px',
+                            'width': '32px',
+                            'height': '32px',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 2,
+                            'line-color': '#6b7280', // gray-500
+                            'target-arrow-color': '#6b7280',
+                            'target-arrow-shape': 'none', // デフォルトは無向
+                            'curve-style': 'bezier',
+                            'label': 'data(weight)',
+                            'color': '#1f2937', // gray-800
+                            'font-size': '12px',
+                            'text-background-color': '#ffffff',
+                            'text-background-opacity': 1,
+                            'text-background-padding': '2px',
+                        }
+                    },
+                    {
+                        selector: ':parent',
+                        style: {
+                            'text-valign': 'top',
+                            'text-halign': 'center',
+                        }
+                    },
+                    {
+                        selector: '.eh-handle',
+                        style: {
+                            'background-color': 'red',
+                            'width': 12,
+                            'height': 12,
+                            'shape': 'ellipse',
+                            'overlay-opacity': 0,
+                            'border-width': 12,
+                            'border-opacity': 0
+                        }
+                    },
+                ],
+                layout: { name: 'grid' }
+            });
+
+            // --- イベントリスナー ---
+
+            // ヘルプモーダル
+            helpButton.addEventListener('click', () => helpModal.classList.remove('hidden'));
+            closeHelpModal.addEventListener('click', () => helpModal.classList.add('hidden'));
+            helpModal.addEventListener('click', (e) => {
+                if (e.target === helpModal) helpModal.classList.add('hidden');
+            });
+
+            // インプット
+            ioTextarea.addEventListener('input', importGraph);
+
+            // コントロール
+            importBtn.addEventListener('click', importGraph);
+            exportBtn.addEventListener('click', exportGraph);
+            resetBtn.addEventListener('click', resetGraph);
+            addNodeBtn.addEventListener('click', addNode);
+            indexingBtn.addEventListener('click', toggleIndexing);
+            directedCheckbox.addEventListener('change', updateGraphStyle);
+            weightedCheckbox.addEventListener('change', (e) => state.isWeighted = e.target.checked);
+            graphTypeSelect.addEventListener('change', (e) => {
+                state.graphMode = e.target.value;
+                rootControl.classList.toggle('hidden', state.graphMode !== 'tree');
+                if (state.graphMode === 'tree') {
+                    directedCheckbox.checked = true;
+                }
+                updateGraphStyle();
+                runLayout();
+            });
+            setRootBtn.addEventListener('click', () => {
+                rebuildAndColorTree();
+            });
+
+            // 画面クリックでコンテキストメニューを隠す
+            document.addEventListener('click', hideContextMenus);
+
+            // Cytoscapeイベント
+            cy.on('cxttap', (evt) => {
+                evt.preventDefault();
+                hideContextMenus();
+                const target = evt.target;
+
+                let menu;
+                if (target === cy) { // 背景を右クリック
+                    state.contextTarget = { type: null, element: null };
+                    return;
+                } else if (target.isNode()) {
+                    state.contextTarget = { type: 'node', element: target };
+                    menu = nodeContextMenu;
+                } else if (target.isEdge()) {
+                    state.contextTarget = { type: 'edge', element: target };
+                    menu = edgeContextMenu;
+                }
+
+                if (menu) {
+                    const { x, y } = evt.renderedPosition;
+                    menu.style.left = `${x}px`;
+                    menu.style.top = `${y}px`;
+                    menu.style.display = 'block';
+                }
+            });
+
+            cy.on('tap', 'node', (evt) => {
+                if (state.edgeAddition.active) {
+                    const toNode = evt.target;
+                    if (toNode.id() !== state.edgeAddition.fromNode) {
+                        const sourceId = state.edgeAddition.fromNode;
+                        const targetId = toNode.id();
+
+                        let edgeData = { group: 'edges', data: { source: sourceId, target: targetId } };
+
+                        if (state.isWeighted) {
+                            const weight = prompt("新しい辺の重みを入力:", "1");
+                            if (weight !== null && !isNaN(parseFloat(weight))) {
+                                edgeData.data.weight = weight;
+                            }
+                        }
+                        cy.add(edgeData);
+                    }
+                    // 辺追加モードを終了
+                    state.edgeAddition.active = false;
+                    state.edgeAddition.fromNode = null;
+                    container.style.cursor = 'default';
+                }
+            });
+
+            // コンテキストメニューアイテムのイベント
+            document.getElementById('delete-node-menu-btn').addEventListener('click', deleteElement);
+            document.getElementById('add-edge-menu-btn').addEventListener('click', startAddEdgeMode);
+            document.getElementById('delete-edge-menu-btn').addEventListener('click', deleteElement);
+            document.getElementById('change-weight-menu-btn').addEventListener('click', changeEdgeWeight);
+            document.getElementById('reverse-edge-menu-btn').addEventListener('click', reverseEdge);
+
+            // --- 関数定義 ---
+
+            function runLayout() {
+                let layoutOptions;
+                if (state.graphMode === 'tree') {
+                    const rootId = rootInput.value;
+                    layoutOptions = {
+                        name: 'breadthfirst',
+                        roots: `node[id = "${rootId}"]`,
+                        directed: true,
+                        padding: 30,
+                        spacingFactor: 1.2
+                    };
+                } else {
+                    layoutOptions = {
+                        name: 'cose',
+                        animate: true,
+                        padding: 50,
+                        nodeRepulsion: 400000,
+                        idealEdgeLength: 100,
+                        edgeElasticity: 100,
+                    };
+                }
+                cy.layout(layoutOptions).run();
+            }
+
+            function updateGraphStyle() {
+                state.isDirected = directedCheckbox.checked;
+                cy.style()
+                    .selector('edge')
+                    .style({
+                        'target-arrow-shape': state.isDirected ? 'triangle' : 'none'
+                    })
+                    .update();
+            }
+
+            function toggleIndexing() {
+                state.isZeroIndexed = !state.isZeroIndexed;
+                indexingBtn.textContent = state.isZeroIndexed ? '0-indexed' : '1-indexed';
+                indexingBtn.classList.toggle('bg-gray-500', state.isZeroIndexed);
+                indexingBtn.classList.toggle('hover:bg-gray-600', state.isZeroIndexed);
+                indexingBtn.classList.toggle('bg-blue-500', !state.isZeroIndexed);
+                indexingBtn.classList.toggle('hover:bg-blue-600', !state.isZeroIndexed);
+            }
+
+            function resetGraph() {
+                cy.elements().remove();
+                ioTextarea.value = '';
+            }
+
+            function addNode() {
+                const existingIds = cy.nodes().map(node => parseInt(node.id()));
+                const offset = state.isZeroIndexed ? 0 : 1;
+                let newId = offset;
+                if (existingIds.length > 0) {
+                    newId = Math.max(...existingIds) + 1;
+                }
+                cy.add({
+                    group: 'nodes',
+                    data: { id: String(newId) },
+                });
+            }
+
+            function hideContextMenus() {
+                nodeContextMenu.style.display = 'none';
+                edgeContextMenu.style.display = 'none';
+            }
+
+            // --- コンテキストメニューのアクション ---
+            function deleteElement() {
+                if (state.contextTarget.element) {
+                    state.contextTarget.element.remove();
+                }
+                hideContextMenus();
+            }
+
+            function startAddEdgeMode() {
+                if (state.contextTarget.type === 'node') {
+                    state.edgeAddition.active = true;
+                    state.edgeAddition.fromNode = state.contextTarget.element.id();
+                    container.style.cursor = 'crosshair';
+                }
+                hideContextMenus();
+            }
+
+            function changeEdgeWeight() {
+                if (state.contextTarget.type === 'edge') {
+                    const edge = state.contextTarget.element;
+                    const currentWeight = edge.data('weight') || "1";
+                    const newWeight = prompt("新しい重みを入力:", currentWeight);
+                    if (newWeight !== null && !isNaN(parseFloat(newWeight))) {
+                        edge.data('weight', newWeight);
+                        state.isWeighted = true;
+                        weightedCheckbox.checked = true;
+                    }
+                }
+                hideContextMenus();
+            }
+
+            function reverseEdge() {
+                if (state.contextTarget.type === 'edge') {
+                    const edge = state.contextTarget.element;
+                    const source = edge.source().id();
+                    const target = edge.target().id();
+                    const weight = edge.data('weight');
+
+                    edge.remove();
+
+                    const newEdge = { group: 'edges', data: { source: target, target: source } };
+                    if (weight !== undefined) {
+                        newEdge.data.weight = weight;
+                    }
+                    cy.add(newEdge);
+                }
+                hideContextMenus();
+            }
+
+
+            // --- インポート/エクスポート ---
+            function importGraph() {
+                cy.elements().remove();
+
+                const text = ioTextarea.value.trim();
+                const lines = text.split('\n').filter(line => line.trim() !== '');
+                if (lines.length === 0) return;
+
+                // 1行目からNを取得
+                let N = NaN;
+                if (importTypeSelect.value === 'edge-list') {
+                    const [N_str] = lines[0].split(/\s+/);
+                    N = parseInt(N_str);
+                } else {
+                    N = parseInt(lines[0]);
+                }
+
+                if (isNaN(N) || N <= 0 || N > MAX_NODES) {
+                    if (text) alert("頂点数(N)が無効です。1 <= N <= " + MAX_NODES + " の範囲で入力してください。");
+                    return;
+                }
+
+                // ここでIndexingを自動判別
+                autoDetectIndexing(lines, N);
+
+                updateGraphStyle();
+
+                try {
+                    const importFunc = {
+                        'edge-list': parseEdgeList,
+                        'adjacency-list': parseAdjacencyList,
+                        'adjacency-matrix': parseAdjacencyMatrix,
+                    }[importTypeSelect.value];
+
+                    const elements = importFunc(lines, N);
+                    cy.add(elements);
+
+                    if (state.graphMode === 'tree') {
+                        rebuildAndColorTree();
+                    } else {
+                        runLayout();
+                    }
+
+                } catch (e) {
+                    alert("入力の解析中にエラーが発生しました: " + e.message);
+                    cy.elements().remove();
+                }
+            }
+
+            function autoDetectIndexing(lines, N) {
+                let hasZero = false;
+                let hasN = false;
+                if (importTypeSelect.value === 'edge-list') {
+                    for (let i = 1; i < lines.length; i++) {
+                        const parts = lines[i].split(/\s+/).map(p => parseInt(p));
+                        if (parts[0] === 0 || parts[1] === 0) hasZero = true;
+                        if (parts[0] === N || parts[1] === N) hasN = true;
+                    }
+                }
+
+                // 0が見つかったら0-indexed、Nが見つかったら1-indexedと判断
+                if (hasZero) {
+                    state.isZeroIndexed = true;
+                } else if (hasN) {
+                    state.isZeroIndexed = false;
+                }
+                // ボタン表示を更新
+                indexingBtn.textContent = state.isZeroIndexed ? '0-indexed' : '1-indexed';
+                indexingBtn.classList.toggle('bg-gray-500', state.isZeroIndexed);
+                indexingBtn.classList.toggle('hover:bg-gray-600', state.isZeroIndexed);
+                indexingBtn.classList.toggle('bg-blue-500', !state.isZeroIndexed);
+                indexingBtn.classList.toggle('hover:bg-blue-600', !state.isZeroIndexed);
+            }
+
+            function parseEdgeList(lines, N) {
+                const elements = [];
+                const offset = state.isZeroIndexed ? 0 : 1;
+
+                for (let i = 0; i < N; i++) {
+                    elements.push({ group: 'nodes', data: { id: String(i + offset) } });
+                }
+
+                for (let i = 1; i < lines.length; i++) {
+                    const parts = lines[i].split(/\s+/);
+                    if (parts.length < 2) continue;
+                    const u = parts[0];
+                    const v = parts[1];
+                    const edge = { group: 'edges', data: { source: u, target: v } };
+                    if (state.isWeighted && parts.length > 2) {
+                        edge.data.weight = parts[2];
+                    }
+                    elements.push(edge);
+                }
+                return elements;
+            }
+
+            function parseAdjacencyList(lines, N) {
+                const elements = [];
+                const offset = state.isZeroIndexed ? 0 : 1;
+
+                for (let i = 0; i < N; i++) {
+                    elements.push({ group: 'nodes', data: { id: String(i + offset) } });
+                }
+
+                for (let i = 0; i < N; i++) {
+                    const u = String(i + offset);
+                    const parts = lines[i + 1].split(/\s+/).filter(p => p !== '');
+                    for (const part of parts) {
+                        elements.push({ group: 'edges', data: { source: u, target: part } });
+                    }
+                }
+                return elements;
+            }
+
+            function parseAdjacencyMatrix(lines, N) {
+                const elements = [];
+                const offset = state.isZeroIndexed ? 0 : 1;
+
+                for (let i = 0; i < N; i++) {
+                    elements.push({ group: 'nodes', data: { id: String(i + offset) } });
+                }
+
+                for (let i = 0; i < N; i++) {
+                    const row = lines[i + 1].split(/\s+/);
+                    for (let j = 0; j < N; j++) {
+                        const val = parseInt(row[j]);
+                        if (val !== 0) {
+                            const u = String(i + offset);
+                            const v = String(j + offset);
+                            const edge = { group: 'edges', data: { source: u, target: v } };
+                            if (state.isWeighted) {
+                                edge.data.weight = String(val);
+                            }
+                            elements.push(edge);
+                        }
+                    }
+                }
+                return elements;
+            }
+
+
+            function exportGraph() {
+                const N = cy.nodes().length;
+                const M = cy.edges().length;
+                let output = `${N} ${M}\n`;
+
+                cy.edges().forEach(edge => {
+                    let line = `${edge.source().id()} ${edge.target().id()}`;
+                    if (state.isWeighted && edge.data('weight')) {
+                        line += ` ${edge.data('weight')}`;
+                    }
+                    output += line + '\n';
+                });
+
+                ioTextarea.value = output;
+            }
+
+            // --- Treeモード関連 ---
+            function rebuildAndColorTree() {
+                if (state.graphMode !== 'tree' || cy.nodes().length === 0) return;
+
+                let rootId = rootInput.value;
+
+                // ルートが存在しない場合はデフォルト値に設定
+                if (!cy.getElementById(rootId).length) {
+                    rootId = state.isZeroIndexed ? '0' : '1';
+                    rootInput.value = rootId;
+                }
+
+                if (!cy.getElementById(rootId).length) return; // それでもルートがなければ終了
+
+                directedCheckbox.checked = true;
+                updateGraphStyle();
+
+                // 1. 手動でBFSを実行し、距離と親子関係を構築
+                const parent = new Map();
+                const distances = new Map();
+                const queue = [];
+                const visited = new Set();
+                let maxDist = 0;
+
+                const rootNode = cy.getElementById(rootId);
+
+                queue.push({ node: rootNode, dist: 0 });
+                visited.add(rootId);
+                distances.set(rootId, 0);
+                parent.set(rootId, null);
+
+                let head = 0;
+                while (head < queue.length) {
+                    const { node, dist } = queue[head++];
+                    maxDist = Math.max(maxDist, dist);
+
+                    // 辺を介して無向で隣接ノードを探索
+                    node.connectedEdges().forEach(edge => {
+                        const neighbor = edge.source().id() === node.id() ? edge.target() : edge.source();
+                        if (!visited.has(neighbor.id())) {
+                            visited.add(neighbor.id());
+                            distances.set(neighbor.id(), dist + 1);
+                            parent.set(neighbor.id(), node.id());
+                            queue.push({ node: neighbor, dist: dist + 1 });
+                        }
+                    });
+                }
+
+                // 2. 辺を再構成
+                const newEdges = [];
+                const currentEdges = cy.edges(); // 重み情報を引き継ぐために元の辺を保持
+                cy.nodes().forEach(node => {
+                    const pId = parent.get(node.id());
+                    if (pId) {
+                        // 元の辺を探して重みを引き継ぐ
+                        let weight = undefined;
+                        const originalEdge = currentEdges.filter(e =>
+                            (e.source().id() === pId && e.target().id() === node.id()) ||
+                            (e.source().id() === node.id() && e.target().id() === pId)
+                        ).first();
+
+                        if (state.isWeighted && originalEdge.length > 0) {
+                            weight = originalEdge.data('weight');
+                        }
+
+                        const edgeObj = { group: 'edges', data: { source: pId, target: node.id() } };
+                        if (weight !== undefined) {
+                            edgeObj.data.weight = weight;
+                        }
+                        newEdges.push(edgeObj);
+                    }
+                });
+
+                cy.edges().remove();
+                cy.add(newEdges);
+
+                // 3. ノードを色付け
+                cy.nodes().forEach(node => {
+                    const dist = distances.get(node.id());
+                    let color = '#d1d5db'; // デフォルト色 (未到達)
+                    if (dist !== undefined) {
+                        if (dist === 0) {
+                            color = '#f87171'; // rootは赤 (red-400)
+                        } else {
+                            const hue = 120 + (dist / (maxDist || 1)) * 60; // 緑から黄色へのグラデーション
+                            color = `hsl(${hue}, 70%, 60%)`;
+                        }
+                    }
+                    node.style('background-color', color);
+                    node.style('border-color', color);
+                });
+
+                runLayout();
+            }
+
+            // 初期化
+            updateGraphStyle();
+        });
+    </script>
+</body>
+
+</html>
