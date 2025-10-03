@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* カスタムスタイル */
+body {
+    font-family: 'Inter', 'Helvetica Neue', 'Arial', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'BIZ UDPGothic', Meiryo, sans-serif;
+    background-color: #f8fafc;
+}
+
+/* vis.jsのナビゲーションボタンの位置を調整 */
+#mynetwork .vis-navigation {
+    top: 15px;
+    right: 15px;
+    bottom: auto;
+    left: auto;
+}
+
+/* 右クリックメニュー */
+.context-menu {
+    display: none;
+    position: absolute;
+    z-index: 1000;
+    @apply bg-white border border-gray-200 rounded-md shadow-lg py-1;
+}
+
+.context-menu-item {
+    @apply px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer;
+}
+
+.context-menu-item.delete {
+    @apply text-red-600 hover:bg-red-50;
+}
+
+/* グラフ描画エリアのコンテナ */
+#mynetwork {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.network-container {
+    position: relative;
+    flex-grow: 1;
+    height: calc(100vh - 230px);
+}
